@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>Stableford Tournament</title>
+  <style>
+    :root{
+      --bg:#0f172a; --panel:#111827; --card:#1f2937; --muted:#94a3b8;
+      --text:#f8fafc; --accent:#22c55e; --accent2:#3b82f6; --danger:#ef4444;
+      --border:#334155; --gold:#f59e0b;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:linear-gradient(180deg,#0b1220,#111827);color:var(--text);min-height:100vh}
+    .app{max-width:900px;margin:0 auto;padding:16px 16px 100px}
+    .header{position:sticky;top:0;z-index:10;background:rgba(15,23,42,.92);backdrop-filter:blur(10px);border-bottom:1px solid var(--border);margin:-16px -16px 16px;padding:16px}
+    h1{margin:0;font-size:1.35rem;font-weight:800}
+    .sub{margin-top:6px;color:var(--muted);font-size:.92rem}
+    .tabs{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}
+    .tab{border:1px solid var(--border);background:#0b1220;color:var(--text);padding:10px 14px;border-radius:12px;font-weight:700;cursor:pointer}
+    .tab.active{background:var(--accent2);border-color:var(--accent2)}
+    .screen{display:none}.screen.active{display:block}
+    .card{background:rgba(31,41,55,.95);border:1px solid var(--border);border-radius:18px;padding:16px;margin-bottom:16px;box-shadow:0 10px 30px rgba(0,0,0,.18)}
+    .card h2{margin:0 0 12px;font-size:1.08rem}
+    .grid{display:grid;gap:12px}.grid.two{grid-template-columns:1fr 1fr}
+    .grid.four{grid-template-columns:repeat(4,1fr)}
+    @media (max-width:800px){.grid.four{grid-template-columns:repeat(2,1fr)}}
+    @media (max-width:640px){.grid.two,.grid.four{grid-template-columns:1fr}.points-buttons{grid-template-columns:repeat(3,1fr)!important}}
+    label{display:block;font-size:.9rem;color:var(--muted);margin-bottom:6px;font-weight:600}
+    select,input{width:100%;border:1px solid var(--border);background:#0b1220;color:var(--text);border-radius:12px;padding:13px 12px;font-size:1rem}
+    .btn-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
+    button{border:none;border-radius:12px;padding:12px 15px;font-size:.98rem;font-weight:800;cursor:pointer}
+    .primary{background:var(--accent);color:#052e16}.secondary{background:#1d4ed8;color:white}.ghost{background:transparent;color:var(--text);border:1px solid var(--border)}.danger{background:var(--danger);color:white}
+    .pill{display:inline-block;font-size:.85rem;background:#0b1220;border:1px solid var(--border);color:var(--muted);padding:6px 10px;border-radius:999px;margin:4px 6px 0 0}
+    table{width:100%;border-collapse:collapse;overflow:hidden;border-radius:14px}
+    th,td{padding:12px 10px;border-bottom:1px solid var(--border);text-align:left;font-size:.95rem}
+    th{color:#cbd5e1;font-size:.82rem;text-transform:uppercase;background:#0b1220}
+    tr:last-child td{border-bottom:none}
+    .rank{font-size:1.15rem;font-weight:900}.gold{color:var(--gold)}.muted{color:var(--muted)}
+    .score-big{font-size:2rem;font-weight:900;line-height:1;margin-top:6px}
+    .flex{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+    .small{font-size:.88rem;color:var(--muted)}
+    .log-item{padding:12px;background:#0b1220;border:1px solid var(--border);border-radius:14px;margin-bottom:10px}
+    .points-buttons{display:grid;grid-template-columns:repeat(6,1fr);gap:8px}
+    .point-btn{background:#0b1220;border:1px solid var(--border);color:var(--text);padding:12px 8px;border-radius:12px;font-weight:800}
+    .point-btn.active{background:var(--accent);color:#052e16;border-color:var(--accent)}
+    .footer-nav{position:fixed;bottom:0;left:0;right:0;background:rgba(15,23,42,.96);backdrop-filter:blur(10px);border-top:1px solid var(--border);display:flex;justify-content:center;gap:10px;padding:12px;z-index:20}
+    .footer-nav button{min-width:110px}
+    .empty{color:var(--muted);font-size:.95rem;padding:8px 0}
+    .team-box{padding:12px;background:#0b1220;border:1px solid var(--border);border-radius:14px}
+    .success{color:#86efac;font-size:.9rem;margin-top:8px;display:none}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="header">
+      <h1>Stableford Tournament</h1>
+      <div class="sub">4 teams • 2 players per team • 3 courses • 18 holes each</div>
+      <div class="tabs">
+        <button class="tab active" data-screen="scores">Enter Scores</button>
+        <button class="tab" data-screen="players">Players</button>
+        <button class="tab" data-screen="leaderboard">Leaderboard</button>
+        <button class="tab" data-screen="rules">Rules</button>
+      </div>
+    </div>
+
+    <section id="scores" class="screen active">
+      <div class="card">
+        <h2>Enter a score</h2>
+        <div class="grid two">
+          <div><label for="course">Course</label><select id="course"></select></div>
+          <div><label for="hole">Hole</label><select id="hole"></select></div>
+          <div><label for="team">Team</label><select id="team"></select></div>
+          <div><label for="player">Player</label><select id="player"></select></div>
+        </div>
+
+        <div style="margin-top:14px">
+          <label>Points</label>
+          <div class="points-buttons" id="pointsButtons"></div>
+          <div class="small" style="margin-top:8px">5 = Eagle • 4 = Birdie • 3 = Par • 2 = Bogey • 1 = Double • 0 = Triple+</div>
+        </div>
+
+        <div class="btn-row">
+          <button class="primary" id="saveScoreBtn">Save Score</button>
+          <button class="ghost" id="clearHoleBtn">Clear This Team/Hole</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="flex">
+          <div>
+            <div class="small">Current calculated hole total</div>
+            <div class="score-big" id="currentHoleTotal">0</div>
+          </div>
+          <div>
+            <span class="pill" id="p1Display">Player 1: —</span>
+            <span class="pill" id="p2Display">Player 2: —</span>
+            <span class="pill" id="bonusDisplay">Bonus: 0</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Recent entries</h2>
+        <div id="recentEntries"></div>
+      </div>
+    </section>
+
+    <section id="players" class="screen">
+      <div class="card">
+        <h2>Edit player names</h2>
+        <div class="grid two">
+          <div class="team-box">
+            <div class="small" style="margin-bottom:10px;"><strong>Team 1</strong></div>
+            <label for="Team 1_p1">Player 1 name</label>
+            <input id="Team 1_p1" placeholder="Enter name" />
+            <label for="Team 1_p2" style="margin-top:12px;">Player 2 name</label>
+            <input id="Team 1_p2" placeholder="Enter name" />
+          </div>
+          <div class="team-box">
+            <div class="small" style="margin-bottom:10px;"><strong>Team 2</strong></div>
+            <label for="Team 2_p1">Player 1 name</label>
+            <input id="Team 2_p1" placeholder="Enter name" />
+            <label for="Team 2_p2" style="margin-top:12px;">Player 2 name</label>
+            <input id="Team 2_p2" placeholder="Enter name" />
+          </div>
+          <div class="team-box">
+            <div class="small" style="margin-bottom:10px;"><strong>Team 3</strong></div>
+            <label for="Team 3_p1">Player 1 name</label>
+            <input id="Team 3_p1" placeholder="Enter name" />
+            <label for="Team 3_p2" style="margin-top:12px;">Player 2 name</label>
+            <input id="Team 3_p2" placeholder="Enter name" />
+          </div>
+          <div class="team-box">
+            <div class="small" style="margin-bottom:10px;"><strong>Team 4</strong></div>
+            <label for="Team 4_p1">Player 1 name</label>
+            <input id="Team 4_p1" placeholder="Enter name" />
+            <label for="Team 4_p2" style="margin-top:12px;">Player 2 name</label>
+            <input id="Team 4_p2" placeholder="Enter name" />
+          </div>
+        </div>
+        <div class="btn-row">
+          <button class="primary" id="saveNamesBtn">Save Player Names</button>
+        </div>
+        <div class="success" id="namesSavedMsg">Player names saved.</div>
+      </div>
+    </section>
+
+    <section id="leaderboard" class="screen">
+      <div class="card">
+        <h2>Live leaderboard</h2>
+        <table>
+          <thead><tr><th>Rank</th><th>Team</th><th>Total</th></tr></thead>
+          <tbody id="leaderboardBody"></tbody>
+        </table>
+      </div>
+
+      <div class="card">
+        <h2>Totals by course</h2>
+        <table>
+          <thead><tr><th>Team</th><th>Course 1</th><th>Course 2</th><th>Course 3</th></tr></thead>
+          <tbody id="courseTotalsBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="rules" class="screen">
+      <div class="card">
+        <h2>Scoring rules</h2>
+        <p class="small" style="line-height:1.6;color:#e5e7eb;">
+          Each team has 2 players. For every hole, the higher player point value counts at 100%.
+          The lower player point value counts at 50%. If both players score par or better
+          (3 points or higher), the team earns a +1 bonus point for that hole.
+        </p>
+        <div><span class="pill">Eagle = 5</span><span class="pill">Birdie = 4</span><span class="pill">Par = 3</span><span class="pill">Bogey = 2</span><span class="pill">Double = 1</span><span class="pill">Triple+ = 0</span></div>
+      </div>
+    </section>
+  </div>
+
+  <div class="footer-nav">
+    <button class="tab active" data-screen="scores">Scores</button>
+    <button class="tab" data-screen="players">Players</button>
+    <button class="tab" data-screen="leaderboard">Leaderboard</button>
+    <button class="tab" data-screen="rules">Rules</button>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
+    import { getDatabase, ref, get, set, update, onValue } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyCjJZ4pHmgjzMDSWWaTf3v0mvreSuHLg-0",
+      authDomain: "stableford-tournament.firebaseapp.com",
+      databaseURL: "https://stableford-tournament-default-rtdb.firebaseio.com",
+      projectId: "stableford-tournament",
+      storageBucket: "stableford-tournament.firebasestorage.app",
+      messagingSenderId: "145557371254",
+      appId: "1:145557371254:web:4185a6f3d67160a7346257",
+      measurementId: "G-7WLCR6CGLY"
+    };
+
+    const DEFAULT_TOURNAMENT_ID = "stableford2026";
+    const TEAMS=["Team 1","Team 2","Team 3","Team 4"];
+    const COURSES=["Course 1","Course 2","Course 3"];
+    const HOLES=Array.from({length:18},(_,i)=>`Hole ${i+1}`);
+    const POINT_OPTIONS=[5,4,3,2,1,0];
+
+    let selectedPoints=3;
+    let state={
+      scores:{},
+      players:{
+        "Team 1": {"Player 1":"Player 1","Player 2":"Player 2"},
+        "Team 2": {"Player 1":"Player 1","Player 2":"Player 2"},
+        "Team 3": {"Player 1":"Player 1","Player 2":"Player 2"},
+        "Team 4": {"Player 1":"Player 1","Player 2":"Player 2"}
+      }
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+    const tournamentRef = ref(db, `tournaments/${DEFAULT_TOURNAMENT_ID}`);
+
+    function scoreKey(course,hole,team,playerSlot){return `${course}|${hole}|${team}|${playerSlot}`}
+
+    function playerName(team, playerSlot){
+      return (state.players?.[team]?.[playerSlot] || playerSlot).trim() || playerSlot;
+    }
+
+    function teamHolePlayers(course,hole,team){
+      const p1=state.scores[scoreKey(course,hole,team,"Player 1")];
+      const p2=state.scores[scoreKey(course,hole,team,"Player 2")];
+      return [p1,p2];
+    }
+
+    function calcHoleTotal(course,hole,team){
+      const [p1,p2]=teamHolePlayers(course,hole,team);
+      const a=Number.isFinite(p1)?p1:0;
+      const b=Number.isFinite(p2)?p2:0;
+      const high=Math.max(a,b), low=Math.min(a,b);
+      const bonus=(a>=3&&b>=3&&Number.isFinite(p1)&&Number.isFinite(p2))?1:0;
+      return {p1:Number.isFinite(p1)?p1:null,p2:Number.isFinite(p2)?p2:null,bonus,total:high+(low*0.5)+bonus};
+    }
+
+    function calcTeamTotal(team){
+      let total=0;
+      for(const course of COURSES){for(const hole of HOLES){total+=calcHoleTotal(course,hole,team).total}}
+      return total;
+    }
+    function calcCourseTotal(team,course){
+      let total=0;
+      for(const hole of HOLES){total+=calcHoleTotal(course,hole,team).total}
+      return total;
+    }
+
+    function populateSelect(el,items){el.innerHTML=items.map(v=>`<option value="${v}">${v}</option>`).join("")}
+
+    function populatePlayerSelect(){
+      const team=document.getElementById("team").value || "Team 1";
+      const el=document.getElementById("player");
+      el.innerHTML = `
+        <option value="Player 1">${playerName(team,"Player 1")}</option>
+        <option value="Player 2">${playerName(team,"Player 2")}</option>
+      `;
+    }
+
+    function buildPointsButtons(){
+      const wrap=document.getElementById("pointsButtons");
+      wrap.innerHTML=POINT_OPTIONS.map(p=>`<button type="button" class="point-btn ${p===selectedPoints?'active':''}" data-points="${p}">${p}</button>`).join("");
+      wrap.querySelectorAll(".point-btn").forEach(btn=>btn.addEventListener("click",()=>{selectedPoints=Number(btn.dataset.points);buildPointsButtons()}));
+    }
+
+    function currentSelection(){
+      return {
+        course:document.getElementById("course").value,
+        hole:document.getElementById("hole").value,
+        team:document.getElementById("team").value,
+        playerSlot:document.getElementById("player").value
+      };
+    }
+
+    function updateCurrentHoleCard(){
+      const {course,hole,team}=currentSelection();
+      const data=calcHoleTotal(course,hole,team);
+      document.getElementById("currentHoleTotal").textContent=data.total%1===0?data.total:data.total.toFixed(1);
+      document.getElementById("p1Display").textContent=`${playerName(team,"Player 1")}: ${data.p1??"—"}`;
+      document.getElementById("p2Display").textContent=`${playerName(team,"Player 2")}: ${data.p2??"—"}`;
+      document.getElementById("bonusDisplay").textContent=`Bonus: ${data.bonus}`;
+    }
+
+    function renderRecentEntries(){
+      const box=document.getElementById("recentEntries");
+      const entries=Object.entries(state.scores).slice(-12).reverse();
+      if(!entries.length){box.innerHTML=`<div class="empty">No scores entered yet.</div>`;return}
+      box.innerHTML=entries.map(([key,val])=>{
+        const [course,hole,team,playerSlot]=key.split("|");
+        return `<div class="log-item"><strong>${team}</strong> • ${playerName(team,playerSlot)}<br><span class="muted">${course} • ${hole}</span><br><span>Points: <strong>${val}</strong></span></div>`;
+      }).join("");
+    }
+
+    function renderLeaderboard(){
+      const totals=TEAMS.map(team=>({team,total:calcTeamTotal(team)})).sort((a,b)=>b.total-a.total);
+      document.getElementById("leaderboardBody").innerHTML=totals.map((row,idx)=>{
+        const rank=idx===0?"🥇":idx===1?"🥈":idx===2?"🥉":`#${idx+1}`;
+        const totalText=row.total%1===0?row.total:row.total.toFixed(1);
+        return `<tr><td class="rank ${idx===0?'gold':''}">${rank}</td><td><strong>${row.team}</strong></td><td><strong>${totalText}</strong></td></tr>`;
+      }).join("");
+      document.getElementById("courseTotalsBody").innerHTML=TEAMS.map(team=>{
+        const fmt=n=>n%1===0?n:n.toFixed(1);
+        return `<tr><td><strong>${team}</strong></td><td>${fmt(calcCourseTotal(team,"Course 1"))}</td><td>${fmt(calcCourseTotal(team,"Course 2"))}</td><td>${fmt(calcCourseTotal(team,"Course 3"))}</td></tr>`;
+      }).join("");
+    }
+
+    function fillNameInputs(){
+      for(const team of TEAMS){
+        document.getElementById(`${team}_p1`).value = state.players?.[team]?.["Player 1"] || "Player 1";
+        document.getElementById(`${team}_p2`).value = state.players?.[team]?.["Player 2"] || "Player 2";
+      }
+    }
+
+    function refreshAll(){
+      populatePlayerSelect();
+      updateCurrentHoleCard();
+      renderRecentEntries();
+      renderLeaderboard();
+      fillNameInputs();
+    }
+
+    function setScreen(name){
+      document.querySelectorAll(".screen").forEach(s=>s.classList.toggle("active",s.id===name));
+      document.querySelectorAll('.tab[data-screen]').forEach(btn=>btn.classList.toggle("active",btn.dataset.screen===name));
+    }
+
+    async function saveScore(){
+      const {course,hole,team,playerSlot}=currentSelection();
+      const key = scoreKey(course,hole,team,playerSlot);
+      await update(tournamentRef, { [`scores/${key}`]: selectedPoints });
+    }
+
+    async function clearHole(){
+      const {course,hole,team}=currentSelection();
+      await update(tournamentRef, {
+        [`scores/${scoreKey(course,hole,team,"Player 1")}`]: null,
+        [`scores/${scoreKey(course,hole,team,"Player 2")}`]: null
+      });
+    }
+
+    async function saveNames(){
+      const updatedPlayers = JSON.parse(JSON.stringify(state.players));
+      for(const team of TEAMS){
+        updatedPlayers[team]["Player 1"] = (document.getElementById(`${team}_p1`).value || "Player 1").trim() || "Player 1";
+        updatedPlayers[team]["Player 2"] = (document.getElementById(`${team}_p2`).value || "Player 2").trim() || "Player 2";
+      }
+      await update(tournamentRef, { players: updatedPlayers });
+      const msg = document.getElementById("namesSavedMsg");
+      msg.style.display = "block";
+      setTimeout(() => msg.style.display = "none", 1500);
+    }
+
+    async function ensureBaseData(){
+      const snap = await get(tournamentRef);
+      if(!snap.exists()){
+        await set(tournamentRef, state);
+      } else {
+        const data = snap.val() || {};
+        if(!data.players){
+          await update(tournamentRef, { players: state.players });
+        }
+      }
+    }
+
+    function init(){
+      populateSelect(document.getElementById("course"),COURSES);
+      populateSelect(document.getElementById("hole"),HOLES);
+      populateSelect(document.getElementById("team"),TEAMS);
+      buildPointsButtons();
+
+      document.getElementById("team").addEventListener("change", ()=>{populatePlayerSelect(); updateCurrentHoleCard();});
+      ["course","hole","player"].forEach(id=>document.getElementById(id).addEventListener("change", updateCurrentHoleCard));
+
+      document.getElementById("saveScoreBtn").addEventListener("click", saveScore);
+      document.getElementById("clearHoleBtn").addEventListener("click", clearHole);
+      document.getElementById("saveNamesBtn").addEventListener("click", saveNames);
+
+      document.querySelectorAll('.tab[data-screen]').forEach(btn=>btn.addEventListener("click",()=>setScreen(btn.dataset.screen)));
+
+      onValue(tournamentRef, (snapshot) => {
+        const data = snapshot.val() || {};
+        state = {
+          scores: data.scores || {},
+          players: data.players || state.players
+        };
+        refreshAll();
+      });
+
+      ensureBaseData();
+      refreshAll();
+    }
+
+    init();
+  </script>
+</body>
+</html>
