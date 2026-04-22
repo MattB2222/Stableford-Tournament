@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Live Tournament Scoring</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --panel: #111827;
+      --card: #1f2937;
+      --text: #f8fafc;
+      --muted: #94a3b8;
+      --accent: #22c55e;
+      --accent2: #3b82f6;
+      --danger: #ef4444;
+      --border: #334155;
+      --gold: #f59e0b;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: linear-gradient(180deg, #0b1220, #111827);
+      color: var(--text);
+      min-height: 100vh;
+    }
+    .app { max-width: 1000px; margin: 0 auto; padding: 16px 16px 96px; }
+    .header {
+      position: sticky; top: 0; z-index: 10;
+      margin: -16px -16px 16px; padding: 16px;
+      background: rgba(15, 23, 42, 0.92); backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--border);
+    }
+    h1 { margin: 0; font-size: 1.45rem; }
+    .sub { color: var(--muted); margin-top: 6px; font-size: 0.95rem; }
+    .tabs, .footer-nav { display: flex; gap: 8px; flex-wrap: wrap; }
+    .tabs { margin-top: 14px; }
+    .footer-nav {
+      position: fixed; left: 0; right: 0; bottom: 0; z-index: 20;
+      justify-content: center; padding: 12px;
+      background: rgba(15,23,42,0.96); backdrop-filter: blur(10px);
+      border-top: 1px solid var(--border);
+    }
+    .tab, button {
+      border: 1px solid var(--border);
+      background: #0b1220; color: var(--text);
+      border-radius: 12px; cursor: pointer;
+      padding: 10px 14px; font-weight: 700; font-size: 0.96rem;
+    }
+    .tab.active { background: var(--accent2); border-color: var(--accent2); }
+    .screen { display: none; }
+    .screen.active { display: block; }
+    .card {
+      background: rgba(31,41,55,0.95); border: 1px solid var(--border);
+      border-radius: 18px; padding: 16px; margin-bottom: 16px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.18);
+    }
+    .card h2 { margin: 0 0 12px; font-size: 1.08rem; }
+    .grid { display: grid; gap: 12px; }
+    .grid.two { grid-template-columns: 1fr 1fr; }
+    .grid.three { grid-template-columns: repeat(3, 1fr); }
+    @media (max-width: 720px) {
+      .grid.two, .grid.three { grid-template-columns: 1fr; }
+      .points-buttons { grid-template-columns: repeat(3, 1fr) !important; }
+    }
+    label { display: block; font-size: 0.9rem; color: var(--muted); margin-bottom: 6px; font-weight: 600; }
+    select, input, textarea {
+      width: 100%; padding: 12px; border-radius: 12px;
+      border: 1px solid var(--border); background: #0b1220; color: var(--text);
+      font-size: 1rem;
+    }
+    textarea { min-height: 160px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .btn-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
+    .primary { background: var(--accent); color: #052e16; border-color: var(--accent); }
+    .secondary { background: #1d4ed8; color: white; border-color: #1d4ed8; }
+    .danger { background: var(--danger); color: white; border-color: var(--danger); }
+    .ghost { background: transparent; }
+    .pill {
+      display: inline-block; font-size: 0.84rem; padding: 6px 10px; margin: 4px 6px 0 0;
+      border-radius: 999px; background: #0b1220; border: 1px solid var(--border); color: var(--muted);
+    }
+    .small { font-size: 0.88rem; color: var(--muted); }
+    .score-big { font-size: 2rem; font-weight: 900; }
+    .flex { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 12px 10px; border-bottom: 1px solid var(--border); text-align: left; }
+    th { text-transform: uppercase; letter-spacing: 0.05em; font-size: 0.8rem; color: #cbd5e1; background: #0b1220; }
+    tr:last-child td { border-bottom: none; }
+    .rank { font-size: 1.1rem; font-weight: 900; }
+    .gold { color: var(--gold); }
+    .log-item {
+      padding: 12px; border: 1px solid var(--border); border-radius: 14px;
+      background: #0b1220; margin-bottom: 10px;
+    }
+    .points-buttons { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
+    .point-btn.active { background: var(--accent); color: #052e16; border-color: var(--accent); }
+    .status { font-size: 0.9rem; margin-top: 10px; }
+    .ok { color: #86efac; }
+    .warn { color: #fca5a5; }
+    .hidden { display: none !important; }
+    code.inline { background: #0b1220; padding: 2px 6px; border-radius: 6px; border: 1px solid var(--border); }
+    a { color: #93c5fd; }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="header">
+      <h1>Live Tournament Scoring</h1>
+      <div class="sub">Live shared scoring for 4 teams • 2 players per team • 3 courses • 18 holes</div>
+      <div class="tabs">
+        <button class="tab active" data-screen="scores">Enter Scores</button>
+        <button class="tab" data-screen="leaderboard">Leaderboard</button>
+        <button class="tab" data-screen="rules">Rules</button>
+        <button class="tab" data-screen="setup">Live Setup</button>
+      </div>
+    </div>
+
+    <section id="scores" class="screen active">
+      <div class="card">
+        <h2>Enter a score</h2>
+        <div class="grid three">
+          <div><label for="tournamentId">Tournament ID</label><input id="tournamentId" placeholder="spring-2026" /></div>
+          <div><label for="course">Course</label><select id="course"></select></div>
+          <div><label for="hole">Hole</label><select id="hole"></select></div>
+          <div><label for="team">Team</label><select id="team"></select></div>
+          <div><label for="player">Player</label><select id="player"></select></div>
+          <div><label for="editorName">Entered by</label><input id="editorName" placeholder="Matt" /></div>
+        </div>
+
+        <div style="margin-top:14px;">
+          <label>Points</label>
+          <div class="points-buttons" id="pointsButtons"></div>
+          <div class="small" style="margin-top:8px;">5 = Eagle • 4 = Birdie • 3 = Par • 2 = Bogey • 1 = Double • 0 = Triple+</div>
+        </div>
+
+        <div class="btn-row">
+          <button class="primary" id="saveScoreBtn">Save Score</button>
+          <button class="ghost" id="clearHoleBtn">Clear This Team/Hole</button>
+          <button class="secondary" id="connectBtn">Connect Live</button>
+        </div>
+        <div id="liveStatus" class="status warn">Not connected yet.</div>
+      </div>
+
+      <div class="card">
+        <div class="flex">
+          <div>
+            <div class="small">Current calculated hole total</div>
+            <div class="score-big" id="currentHoleTotal">0</div>
+          </div>
+          <div>
+            <span class="pill" id="p1Display">Player 1: —</span>
+            <span class="pill" id="p2Display">Player 2: —</span>
+            <span class="pill" id="bonusDisplay">Bonus: 0</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Recent live entries</h2>
+        <div id="recentEntries"></div>
+      </div>
+    </section>
+
+    <section id="leaderboard" class="screen">
+      <div class="card">
+        <h2>Live leaderboard</h2>
+        <table>
+          <thead><tr><th>Rank</th><th>Team</th><th>Total</th></tr></thead>
+          <tbody id="leaderboardBody"></tbody>
+        </table>
+      </div>
+
+      <div class="card">
+        <h2>Totals by course</h2>
+        <table>
+          <thead><tr><th>Team</th><th>Course 1</th><th>Course 2</th><th>Course 3</th></tr></thead>
+          <tbody id="courseTotalsBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="rules" class="screen">
+      <div class="card">
+        <h2>Scoring rules</h2>
+        <p class="small" style="line-height:1.7;color:#e5e7eb;">
+          Each team has 2 players. For every hole, the higher player point value counts at 100%.
+          The lower player point value counts at 50%. If both players score par or better
+          (3 points or higher), the team earns a +1 bonus point for that hole.
+        </p>
+        <div>
+          <span class="pill">Eagle = 5</span><span class="pill">Birdie = 4</span><span class="pill">Par = 3</span>
+          <span class="pill">Bogey = 2</span><span class="pill">Double = 1</span><span class="pill">Triple+ = 0</span>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Example</h2>
+        <p class="small" style="line-height:1.7;color:#e5e7eb;">If Player 1 gets a Birdie (4) and Player 2 gets Par (3), the team score is 4 + (3 × 0.5) + 1 bonus = 6.5.</p>
+      </div>
+    </section>
+
+    <section id="setup" class="screen">
+      <div class="card">
+        <h2>Live Setup</h2>
+        <p class="small" style="line-height:1.7;color:#e5e7eb;">
+          This app uses Firebase Realtime Database for shared live scores. Create a Firebase project,
+          enable Realtime Database, then paste your config below. The config is saved only in your browser.
+        </p>
+        <div class="grid two">
+          <div>
+            <label for="firebaseConfig">Firebase config JSON</label>
+            <textarea id="firebaseConfig" placeholder='{"apiKey":"...","authDomain":"...","databaseURL":"https://...","projectId":"...","appId":"..."}'></textarea>
+          </div>
+          <div>
+            <label>What to do</label>
+            <div class="small" style="line-height:1.8;color:#e5e7eb;">
+              1. Create a Firebase project and register a web app. <br>
+              2. Enable Realtime Database. <br>
+              3. Paste the config JSON here. <br>
+              4. Use this temporary database rule for your event, then tighten it later:<br><br>
+              <code class="inline">{ "rules": { ".read": true, ".write": true } }</code>
+            </div>
+          </div>
+        </div>
+        <div class="btn-row">
+          <button class="primary" id="saveConfigBtn">Save Config</button>
+          <button class="ghost" id="clearConfigBtn">Clear Config</button>
+        </div>
+        <div class="small" style="margin-top:10px;">Share this static app by uploading <code class="inline">index.html</code> to GitHub Pages or Netlify Drop.</div>
+      </div>
+
+      <div class="card">
+        <h2>Backups</h2>
+        <div class="btn-row">
+          <button class="secondary" id="exportBtn">Export Backup</button>
+          <button class="ghost" id="importBtn">Import Backup</button>
+          <button class="danger" id="resetBtn">Reset Tournament in Cloud</button>
+        </div>
+        <input type="file" id="importFile" accept=".json" class="hidden" />
+      </div>
+    </section>
+  </div>
+
+  <div class="footer-nav">
+    <button class="tab active" data-screen="scores">Scores</button>
+    <button class="tab" data-screen="leaderboard">Leaderboard</button>
+    <button class="tab" data-screen="rules">Rules</button>
+    <button class="tab" data-screen="setup">Setup</button>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.12.1/firebase-app.js';
+    import { getDatabase, ref, set, get, onValue, update, remove } from 'https://www.gstatic.com/firebasejs/12.12.1/firebase-database.js';
+
+    const TEAMS = ["Team 1", "Team 2", "Team 3", "Team 4"];
+    const PLAYERS = ["Player 1", "Player 2"];
+    const COURSES = ["Course 1", "Course 2", "Course 3"];
+    const HOLES = Array.from({length: 18}, (_, i) => `Hole ${i + 1}`);
+    const POINT_OPTIONS = [5, 4, 3, 2, 1, 0];
+    const CONFIG_KEY = 'live_tournament_firebase_config_v1';
+    const LOCAL_PREFS_KEY = 'live_tournament_prefs_v1';
+
+    let selectedPoints = 3;
+    let firebaseApp = null;
+    let database = null;
+    let unsubscribe = null;
+    let liveState = { scores: {}, meta: { updatedAt: null } };
+
+    const els = {
+      course: document.getElementById('course'),
+      hole: document.getElementById('hole'),
+      team: document.getElementById('team'),
+      player: document.getElementById('player'),
+      editorName: document.getElementById('editorName'),
+      tournamentId: document.getElementById('tournamentId'),
+      pointsButtons: document.getElementById('pointsButtons'),
+      p1Display: document.getElementById('p1Display'),
+      p2Display: document.getElementById('p2Display'),
+      bonusDisplay: document.getElementById('bonusDisplay'),
+      currentHoleTotal: document.getElementById('currentHoleTotal'),
+      leaderboardBody: document.getElementById('leaderboardBody'),
+      courseTotalsBody: document.getElementById('courseTotalsBody'),
+      recentEntries: document.getElementById('recentEntries'),
+      liveStatus: document.getElementById('liveStatus'),
+      firebaseConfig: document.getElementById('firebaseConfig')
+    };
+
+    function populateSelect(el, items) {
+      el.innerHTML = items.map(v => `<option value="${v}">${v}</option>`).join('');
+    }
+
+    function scoreKey(course, hole, team, player) {
+      return `${course}|${hole}|${team}|${player}`;
+    }
+
+    function getTournamentPath() {
+      const id = (els.tournamentId.value || '').trim() || 'default-tournament';
+      return `tournaments/${id}`;
+    }
+
+    function teamHolePlayers(course, hole, team) {
+      const p1 = liveState.scores?.[scoreKey(course, hole, team, 'Player 1')]?.points;
+      const p2 = liveState.scores?.[scoreKey(course, hole, team, 'Player 2')]?.points;
+      return [p1, p2];
+    }
+
+    function calcHoleTotal(course, hole, team) {
+      const [p1, p2] = teamHolePlayers(course, hole, team);
+      const a = Number.isFinite(p1) ? p1 : 0;
+      const b = Number.isFinite(p2) ? p2 : 0;
+      const high = Math.max(a, b);
+      const low = Math.min(a, b);
+      const bonus = (a >= 3 && b >= 3 && Number.isFinite(p1) && Number.isFinite(p2)) ? 1 : 0;
+      return {
+        p1: Number.isFinite(p1) ? p1 : null,
+        p2: Number.isFinite(p2) ? p2 : null,
+        bonus,
+        total: high + (low * 0.5) + bonus
+      };
+    }
+
+    function calcTeamTotal(team) {
+      let total = 0;
+      for (const course of COURSES) for (const hole of HOLES) total += calcHoleTotal(course, hole, team).total;
+      return total;
+    }
+
+    function calcCourseTotal(team, course) {
+      let total = 0;
+      for (const hole of HOLES) total += calcHoleTotal(course, hole, team).total;
+      return total;
+    }
+
+    function updateCurrentHoleCard() {
+      const course = els.course.value;
+      const hole = els.hole.value;
+      const team = els.team.value;
+      const data = calcHoleTotal(course, hole, team);
+      els.currentHoleTotal.textContent = Number.isInteger(data.total) ? data.total : data.total.toFixed(1);
+      els.p1Display.textContent = `Player 1: ${data.p1 ?? '—'}`;
+      els.p2Display.textContent = `Player 2: ${data.p2 ?? '—'}`;
+      els.bonusDisplay.textContent = `Bonus: ${data.bonus}`;
+    }
+
+    function renderRecentEntries() {
+      const entries = Object.entries(liveState.scores || {})
+        .sort((a, b) => (b[1]?.savedAt || 0) - (a[1]?.savedAt || 0))
+        .slice(0, 12);
+      if (!entries.length) {
+        els.recentEntries.innerHTML = '<div class="small">No scores entered yet.</div>';
+        return;
+      }
+      els.recentEntries.innerHTML = entries.map(([key, val]) => {
+        const [course, hole, team, player] = key.split('|');
+        return `<div class="log-item"><strong>${team}</strong> • ${player}<br><span class="small">${course} • ${hole} • by ${val.editor || 'Unknown'}</span><br><span>Points: <strong>${val.points}</strong></span></div>`;
+      }).join('');
+    }
+
+    function renderLeaderboard() {
+      const totals = TEAMS.map(team => ({ team, total: calcTeamTotal(team) })).sort((a, b) => b.total - a.total);
+      els.leaderboardBody.innerHTML = totals.map((row, idx) => {
+        const rank = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `#${idx + 1}`;
+        const totalText = Number.isInteger(row.total) ? row.total : row.total.toFixed(1);
+        return `<tr><td class="rank ${idx === 0 ? 'gold' : ''}">${rank}</td><td><strong>${row.team}</strong></td><td><strong>${totalText}</strong></td></tr>`;
+      }).join('');
+
+      els.courseTotalsBody.innerHTML = TEAMS.map(team => {
+        const fmt = n => Number.isInteger(n) ? n : n.toFixed(1);
+        return `<tr><td><strong>${team}</strong></td><td>${fmt(calcCourseTotal(team, 'Course 1'))}</td><td>${fmt(calcCourseTotal(team, 'Course 2'))}</td><td>${fmt(calcCourseTotal(team, 'Course 3'))}</td></tr>`;
+      }).join('');
+    }
+
+    function refreshAll() {
+      updateCurrentHoleCard();
+      renderRecentEntries();
+      renderLeaderboard();
+    }
+
+    function setStatus(text, ok = false) {
+      els.liveStatus.textContent = text;
+      els.liveStatus.className = `status ${ok ? 'ok' : 'warn'}`;
+    }
+
+    function setScreen(name) {
+      document.querySelectorAll('.screen').forEach(s => s.classList.toggle('active', s.id === name));
+      document.querySelectorAll('.tab[data-screen]').forEach(btn => btn.classList.toggle('active', btn.dataset.screen === name));
+    }
+
+    function buildPointsButtons() {
+      els.pointsButtons.innerHTML = POINT_OPTIONS.map(p => `<button class="point-btn ${p === selectedPoints ? 'active' : ''}" data-points="${p}">${p}</button>`).join('');
+      els.pointsButtons.querySelectorAll('.point-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          selectedPoints = Number(btn.dataset.points);
+          buildPointsButtons();
+        });
+      });
+    }
+
+    function savePrefs() {
+      localStorage.setItem(LOCAL_PREFS_KEY, JSON.stringify({
+        tournamentId: els.tournamentId.value,
+        editorName: els.editorName.value
+      }));
+    }
+
+    function loadPrefs() {
+      try {
+        const prefs = JSON.parse(localStorage.getItem(LOCAL_PREFS_KEY) || '{}');
+        if (prefs.tournamentId) els.tournamentId.value = prefs.tournamentId;
+        if (prefs.editorName) els.editorName.value = prefs.editorName;
+      } catch {}
+    }
+
+    function loadSavedConfig() {
+      const raw = localStorage.getItem(CONFIG_KEY);
+      if (!raw) return null;
+      els.firebaseConfig.value = raw;
+      try { return JSON.parse(raw); } catch { return null; }
+    }
+
+    function saveConfig() {
+      const raw = els.firebaseConfig.value.trim();
+      localStorage.setItem(CONFIG_KEY, raw);
+      alert('Config saved in this browser.');
+    }
+
+    function clearConfig() {
+      localStorage.removeItem(CONFIG_KEY);
+      els.firebaseConfig.value = '';
+      alert('Saved config cleared.');
+    }
+
+    function connectFirebase() {
+      const raw = els.firebaseConfig.value.trim() || localStorage.getItem(CONFIG_KEY) || '';
+      if (!raw) {
+        setStatus('Paste your Firebase config first.');
+        return;
+      }
+      let config;
+      try {
+        config = JSON.parse(raw);
+      } catch {
+        setStatus('Firebase config is not valid JSON.');
+        return;
+      }
+      try {
+        firebaseApp = initializeApp(config, `app-${Date.now()}`);
+        database = getDatabase(firebaseApp);
+      } catch (e) {
+        setStatus(`Could not initialize Firebase: ${e.message}`);
+        return;
+      }
+
+      savePrefs();
+      localStorage.setItem(CONFIG_KEY, raw);
+      subscribeToTournament();
+    }
+
+    function subscribeToTournament() {
+      if (!database) return;
+      const tournamentRef = ref(database, getTournamentPath());
+      onValue(tournamentRef, (snapshot) => {
+        liveState = snapshot.val() || { scores: {}, meta: { updatedAt: null } };
+        refreshAll();
+        const updatedAt = liveState.meta?.updatedAt ? new Date(liveState.meta.updatedAt).toLocaleString() : 'never';
+        setStatus(`Connected live. Last update: ${updatedAt}`, true);
+      }, (error) => {
+        setStatus(`Live connection failed: ${error.message}`);
+      });
+    }
+
+    async function saveScore() {
+      if (!database) {
+        setStatus('Connect live first.');
+        return;
+      }
+      const editor = (els.editorName.value || '').trim() || 'Unknown';
+      const course = els.course.value;
+      const hole = els.hole.value;
+      const team = els.team.value;
+      const player = els.player.value;
+      const path = `${getTournamentPath()}/scores/${scoreKey(course, hole, team, player)}`;
+      await set(ref(database, path), {
+        points: selectedPoints,
+        editor,
+        savedAt: Date.now()
+      });
+      await update(ref(database, `${getTournamentPath()}/meta`), { updatedAt: Date.now() });
+      savePrefs();
+    }
+
+    async function clearTeamHole() {
+      if (!database) {
+        setStatus('Connect live first.');
+        return;
+      }
+      const course = els.course.value;
+      const hole = els.hole.value;
+      const team = els.team.value;
+      await remove(ref(database, `${getTournamentPath()}/scores/${scoreKey(course, hole, team, 'Player 1')}`));
+      await remove(ref(database, `${getTournamentPath()}/scores/${scoreKey(course, hole, team, 'Player 2')}`));
+      await update(ref(database, `${getTournamentPath()}/meta`), { updatedAt: Date.now() });
+    }
+
+    function exportBackup() {
+      const blob = new Blob([JSON.stringify(liveState, null, 2)], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `${(els.tournamentId.value || 'tournament')}-backup.json`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    }
+
+    function importBackup(file) {
+      if (!database) {
+        setStatus('Connect live first.');
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        try {
+          const parsed = JSON.parse(e.target.result);
+          await set(ref(database, getTournamentPath()), parsed);
+          setStatus('Backup imported.', true);
+        } catch {
+          setStatus('Backup file could not be imported.');
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    async function resetTournament() {
+      if (!database) {
+        setStatus('Connect live first.');
+        return;
+      }
+      const ok = confirm('Delete all live scores for this tournament?');
+      if (!ok) return;
+      await remove(ref(database, getTournamentPath()));
+    }
+
+    function init() {
+      populateSelect(els.course, COURSES);
+      populateSelect(els.hole, HOLES);
+      populateSelect(els.team, TEAMS);
+      populateSelect(els.player, PLAYERS);
+      buildPointsButtons();
+      loadPrefs();
+      loadSavedConfig();
+      refreshAll();
+
+      ['course', 'hole', 'team'].forEach(id => document.getElementById(id).addEventListener('change', updateCurrentHoleCard));
+      ['tournamentId', 'editorName'].forEach(id => document.getElementById(id).addEventListener('change', savePrefs));
+
+      document.querySelectorAll('.tab[data-screen]').forEach(btn => btn.addEventListener('click', () => setScreen(btn.dataset.screen)));
+      document.getElementById('connectBtn').addEventListener('click', connectFirebase);
+      document.getElementById('saveScoreBtn').addEventListener('click', () => saveScore().catch(e => setStatus(`Save failed: ${e.message}`)));
+      document.getElementById('clearHoleBtn').addEventListener('click', () => clearTeamHole().catch(e => setStatus(`Clear failed: ${e.message}`)));
+      document.getElementById('saveConfigBtn').addEventListener('click', saveConfig);
+      document.getElementById('clearConfigBtn').addEventListener('click', clearConfig);
+      document.getElementById('exportBtn').addEventListener('click', exportBackup);
+      document.getElementById('importBtn').addEventListener('click', () => document.getElementById('importFile').click());
+      document.getElementById('importFile').addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (file) importBackup(file);
+        e.target.value = '';
+      });
+      document.getElementById('resetBtn').addEventListener('click', () => resetTournament().catch(e => setStatus(`Reset failed: ${e.message}`)));
+    }
+
+    init();
+  </script>
+</body>
+</html>
